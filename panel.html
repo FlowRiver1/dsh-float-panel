@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>任务浮窗</title>
+<style>
+  :root {
+    --bg: #17171a;
+    --line: rgba(255, 255, 255, 0.09);
+    --text: #f0f0f3;
+    --muted: #9a9aa2;
+    --dim: #6f6f78;
+    --green: #3ddc84;
+    --amber: #ffb020;
+    --red: #ff5d5d;
+    --blue: #6aa6ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: transparent;
+    overflow: hidden;
+  }
+  body {
+    font: 12px/1.4 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+  }
+  #panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+  /* the top 22px is the native drag strip; only passive things live here */
+  .top {
+    flex: none;
+    height: 22px;
+    padding: 0 6px 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .top .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--dim);
+    transition: background 0.2s;
+  }
+  .top .dot.running { background: var(--green); box-shadow: 0 0 6px rgba(61, 220, 132, 0.5); }
+  .top .dot.attn { background: var(--amber); box-shadow: 0 0 6px rgba(255, 176, 32, 0.5); }
+  .top .dot.done { background: #4a7d62; }
+  .top .dot.stale { background: var(--amber); }
+  .top .name { font-size: 10px; letter-spacing: 0.03em; color: var(--dim); }
+  .top .spacer { flex: 1; }
+  .top .more { font-size: 10px; color: var(--muted); padding: 0 2px; }
+  .close {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px; padding: 0; margin: 0;
+    border: 0; border-radius: 5px; background: transparent;
+    color: var(--dim); font-size: 13px; line-height: 1;
+    cursor: default;
+  }
+  .close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+
+  .body { padding: 0 10px 10px; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 20px;
+  }
+  .pill {
+    flex: none;
+    font-size: 9.5px; line-height: 1;
+    padding: 3px 5px; border-radius: 5px;
+    letter-spacing: 0.02em;
+  }
+  .pill.running { color: #8be6b4; background: rgba(61, 220, 132, 0.14); }
+  .pill.attn { color: #ffcf7a; background: rgba(255, 176, 32, 0.16); }
+  .pill.done { color: #93b8a5; background: rgba(255, 255, 255, 0.07); }
+  .txt {
+    flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .txt .tool { color: var(--text); }
+  .txt .rest { color: var(--muted); }
+  .meta { flex: none; font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+  .sub {
+    margin-top: 4px;
+    font-size: 10.5px; color: var(--dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .why {
+    margin-top: 4px;
+    font-size: 11px; color: var(--muted);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .cmd {
+    margin-top: 5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px; color: #b9b9c2;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 5px; padding: 3px 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .acts { display: flex; gap: 6px; margin-top: 8px; }
+  .btn {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; min-width: 0;
+    height: 25px; padding: 0 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text); font-size: 11.5px; font-family: inherit;
+    cursor: default;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .btn:hover { background: rgba(255, 255, 255, 0.1); }
+  .btn.primary { background: var(--green); border-color: transparent; color: #08210f; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.danger { color: #ff9b9b; border-color: rgba(255, 93, 93, 0.35); background: rgba(255, 93, 93, 0.08); }
+  .btn.danger:hover { background: rgba(255, 93, 93, 0.16); }
+  .btn.ghost {
+    flex: none; height: 20px; padding: 0 6px;
+    border-color: transparent; background: transparent;
+    color: var(--dim); font-size: 10.5px;
+  }
+  .btn.ghost:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+  .btn[disabled] { opacity: 0.45; }
+
+  .bar { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); margin-top: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--green); border-radius: 2px; }
+
+  .spin {
+    flex: none; width: 8px; height: 8px; border-radius: 50%;
+    border: 1.5px solid rgba(61, 220, 132, 0.25); border-top-color: var(--green);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty { padding: 2px 0 6px; font-size: 11px; color: var(--dim); }
+  .empty b { color: var(--muted); font-weight: 500; }
+  .banner { display: none; padding: 0 10px 8px; font-size: 10.5px; color: var(--amber); }
+  .banner.show { display: block; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <div class="top">
+    <span class="dot" id="dot"></span>
+    <span class="name">任务浮窗</span>
+    <span class="spacer"></span>
+    <span class="more" id="more"></span>
+    <button class="close" id="close" title="关闭浮窗">×</button>
+  </div>
+  <div class="banner" id="banner">与 DSH 的连接中断，正在等待恢复…</div>
+  <div class="body" id="body"></div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  var TOKEN = params.get('t') || '';
+  var BASE = location.origin + '/float-panel';
+  var state = { sessions: [], total: 0, current: null, serverTime: 0 };
+  var stale = false;
+  var deadSince = 0;
+  var lastRenderKey = null;
+  var lastHeight = 0;
+  var busy = {};
+
+  function esc(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function statusText(s) {
+    if (s.status === 'approval') return '待审批';
+    if (s.status === 'question') return '待回答';
+    if (s.status === 'done') return '已完成';
+    return '进行中';
+  }
+
+  function pillClass(s) {
+    if (s.status === 'approval' || s.status === 'question') return 'attn';
+    if (s.status === 'done') return 'done';
+    return 'running';
+  }
+
+  function activityHtml(s) {
+    var a = s.activity;
+    if (!a) return '';
+    if (a.kind === 'tool') {
+      return '<span class="tool">' + esc(a.tool || '工具') + '</span>' +
+        (a.summary ? '<span class="rest">：' + esc(a.summary) + '</span>' : '');
+    }
+    if (a.kind === 'replying') return '<span class="rest">正在回复…</span>';
+    if (a.kind === 'analyzing') return '<span class="rest">正在整理结果…</span>';
+    if (a.kind === 'thinking') return '<span class="rest">正在思考…</span>';
+    return '<span class="rest">' + esc(a.summary || '处理中…') + '</span>';
+  }
+
+  /* One task only: the most urgent one. Everything else is a "+N" hint. */
+  function render() {
+    var box = document.getElementById('body');
+    var dot = document.getElementById('dot');
+    var s = (state.sessions || [])[0];
+    var others = Math.max(0, (state.sessions || []).length - 1);
+    document.getElementById('more').textContent = others > 0 ? '+' + others : '';
+    dot.className = 'dot' + (s ? ' ' + pillClass(s) : '') + (stale ? ' stale' : '');
+
+    if (!s) {
+      box.innerHTML = '<div class="empty">当前没有运行中的任务</div>';
+      resize();
+      return;
+    }
+
+    var html = '';
+    if (s.status === 'approval' && s.pending) {
+      html += '<div class="row"><span class="pill attn">待审批</span>';
+      html += '<span class="txt"><span class="tool">' + esc(s.pending.toolLabel || s.pending.toolName || '工具操作') + '</span></span>';
+      html += '<button class="btn ghost" data-act="open">打开</button></div>';
+      var reason = s.pending.reason;
+      var detail = s.pending.detail;
+      if (reason) html += '<div class="why">' + esc(reason) + '</div>';
+      if (detail && detail.summary && detail.summary !== reason) {
+        html += '<div class="cmd" title="' + esc(detail.text || detail.summary) + '">' + esc(detail.summary) + '</div>';
+      }
+      html += '<div class="acts">';
+      html += '<button class="btn primary" data-act="approval" data-outcome="allowed-once">允许一次</button>';
+      html += '<button class="btn danger" data-act="approval" data-outcome="rejected">拒绝</button>';
+      html += '</div>';
+    } else if (s.status === 'question' && s.pending) {
+      var qs = s.pending.questions || [];
+      var q = qs[0];
+      html += '<div class="row"><span class="pill attn">' + (qs.length > 1 ? qs.length + ' 个问题' : '待回答') + '</span>';
+      html += '<span class="txt">' + esc(q ? q.question : '需要你回答') + '</span></div>';
+      if (q && q.inline && q.options && q.options.length) {
+        html += '<div class="acts">';
+        for (var i = 0; i < q.options.length && i < 3; i++) {
+          var opt = q.options[i];
+          var cls = q.plan && q.approve === opt.label ? ' primary' : '';
+          html += '<button class="btn' + cls + '" data-act="answer" data-qid="' + esc(q.id) + '" data-label="' + esc(opt.label) + '">' + esc(opt.label) + '</button>';
+        }
+        html += '</div>';
+      } else {
+        html += '<div class="acts"><button class="btn" data-act="open">去 DSH 回答</button></div>';
+      }
+    } else if (s.status === 'done') {
+      html += '<div class="row"><span class="pill done">已完成</span>';
+      html += '<span class="txt">' + esc(s.title) + '</span>';
+      html += '<button class="btn primary" data-act="open" style="flex:none;padding:0 9px">打开</button></div>';
+      if (s.preview) html += '<div class="why">' + esc(s.preview) + '</div>';
+    } else {
+      html += '<div class="row"><span class="spin"></span><span class="txt">' + activityHtml(s) + '</span>';
+      if (s.progress && s.progress.total) html += '<span class="meta">' + s.progress.done + '/' + s.progress.total + '</span>';
+      html += '</div>';
+      var sub = (s.progress && s.progress.current) || s.title;
+      if (sub) html += '<div class="sub">' + esc(sub) + '</div>';
+      if (s.progress && s.progress.total) {
+        var pct = Math.max(3, Math.round((s.progress.done / s.progress.total) * 100));
+        html += '<div class="bar"><i style="width:' + pct + '%"></i></div>';
+      }
+    }
+
+    box.innerHTML = html;
+    resize();
+  }
+
+  /* The native shell owns the window frame; ask it to fit the content. */
+  function resize() {
+    var h = Math.ceil(document.getElementById('panel').getBoundingClientRect().height);
+    if (!h || Math.abs(h - lastHeight) < 1) return;
+    lastHeight = h;
+    postMessageNative({ type: 'resize', height: h });
+  }
+
+  function keyOf(s) {
+    return JSON.stringify([s.id, s.status, s.title, s.activity, s.progress, s.preview,
+      s.pending && s.pending.reason, s.pending && s.pending.detail && s.pending.detail.summary,
+      s.pending && s.pending.questions && s.pending.questions.length]);
+  }
+
+  function applyState(next) {
+    state = next || state;
+    stale = false;
+    deadSince = 0;
+    document.getElementById('banner').classList.remove('show');
+    var key = (state.sessions || []).map(keyOf).join('|');
+    if (key !== lastRenderKey) {
+      lastRenderKey = key;
+      render();
+      requestAnimationFrame(resize);
+    }
+  }
+
+  function markStale() {
+    stale = true;
+    document.getElementById('dot').classList.add('stale');
+    document.getElementById('banner').classList.add('show');
+    resize();
+    if (!deadSince) deadSince = Date.now();
+    else if (Date.now() - deadSince > 90000) retire();
+  }
+
+  function postMessageNative(msg) {
+    try {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dsh) {
+        window.webkit.messageHandlers.dsh.postMessage(msg);
+      }
+    } catch (e) { /* not in the native shell */ }
+  }
+
+  function retire() { postMessageNative({ type: 'retire' }); }
+  function activate() { postMessageNative({ type: 'activate' }); }
+
+  function post(path, body) {
+    return fetch(BASE + path + (TOKEN ? '?t=' + encodeURIComponent(TOKEN) : ''), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (res) { return res.json().catch(function () { return {}; }); });
+  }
+
+  function flash(text) {
+    var banner = document.getElementById('banner');
+    banner.textContent = text;
+    banner.classList.add('show');
+    resize();
+    setTimeout(function () {
+      if (stale) return;
+      banner.classList.remove('show');
+      banner.textContent = '与 DSH 的连接中断，正在等待恢复…';
+      resize();
+    }, 2600);
+  }
+
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    var s = (state.sessions || [])[0];
+    if (!s) return;
+    var id = btn.getAttribute('data-outcome') || btn.getAttribute('data-label') || act;
+    if (busy[id]) return;
+    busy[id] = true;
+    btn.disabled = true;
+    var done = function () { busy[id] = false; btn.disabled = false; };
+
+    if (act === 'open') {
+      post('/action', { type: 'open', sessionId: s.id }).then(function () {
+        activate();
+        done();
+      }, function () { flash('打开失败，请重试'); done(); });
+      return;
+    }
+    if (act === 'approval') {
+      post('/action', { type: 'approval', sessionId: s.id, outcome: btn.getAttribute('data-outcome') })
+        .then(function (res) {
+          if (!res || !res.ok) flash(res && res.reason === 'no-page' ? '请先在 DSH 页面确认一次' : '操作未送达，请重试');
+          done();
+        }, function () { flash('操作未送达，请重试'); done(); });
+      return;
+    }
+    if (act === 'answer') {
+      post('/action', { type: 'answer', sessionId: s.id, questionId: btn.getAttribute('data-qid'), label: btn.getAttribute('data-label') })
+        .then(function (res) {
+          if (!res || !res.ok) flash(res && res.reason === 'no-page' ? '请先在 DSH 页面确认一次' : '操作未送达，请重试');
+          done();
+        }, function () { flash('操作未送达，请重试'); done(); });
+      return;
+    }
+    done();
+  });
+
+  document.getElementById('close').addEventListener('click', function () {
+    post('/panel/close', {}).then(function () { retire(); }, function () { retire(); });
+  });
+
+  /* State arrives over SSE; polling is only the fallback when it drops. */
+  var es = null;
+  var poll = null;
+
+  function startPoll() {
+    if (poll) return;
+    poll = setInterval(function () {
+      fetch(BASE + '/state' + (TOKEN ? '?t=' + encodeURIComponent(TOKEN) : ''))
+        .then(function (r) { return r.json(); })
+        .then(function (body) { if (body && body.ok) applyState(body); else markStale(); })
+        .catch(markStale);
+    }, 2000);
+  }
+
+  function stopPoll() {
+    if (poll) clearInterval(poll);
+    poll = null;
+  }
+
+  function connect() {
+    try {
+      es = new EventSource(BASE + '/events');
+    } catch (e) {
+      startPoll();
+      return;
+    }
+    es.addEventListener('hello', function () { stopPoll(); });
+    es.addEventListener('state', function (ev) {
+      try {
+        var body = JSON.parse(ev.data);
+        if (body && body.ok) applyState(body);
+      } catch (e) { /* ignore a malformed frame */ }
+    });
+    es.addEventListener('panel', function (ev) {
+      try {
+        var body = JSON.parse(ev.data);
+        if (body && body.running === false) retire();
+      } catch (e) { /* ignore */ }
+    });
+    es.onerror = function () {
+      markStale();
+      startPoll();
+      try { es.close(); } catch (e) { /* already closed */ }
+      setTimeout(connect, 2500);
+    };
+  }
+
+  fetch(BASE + '/state' + (TOKEN ? '?t=' + encodeURIComponent(TOKEN) : ''))
+    .then(function (r) { return r.json(); })
+    .then(function (body) { if (body && body.ok) applyState(body); else markStale(); })
+    .catch(markStale);
+
+  connect();
+  setInterval(function () { resize(); }, 4000);
+})();
+</script>
+</body>
+</html>

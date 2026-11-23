@@ -1,0 +1,12 @@
+# dsh-float-panel — one loader entry. The host half (index.js) serves the
+# /float-panel/* routes and folds every session's event log into the state the
+# panel polls; the browser half (client.js) is picked up by dsh-client-modules
+# through package.json's dsh.client declaration, exactly like the shipped
+# ui-* packages.
+- insert:
+    - id: float-panel
+      name: 'dsh-float-panel'
+      config:
+        # Open the floating window automatically when a task starts, so the
+        # panel is already on screen by the time you switch away from DSH.
+        autoOpen: true

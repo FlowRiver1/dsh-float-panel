@@ -1,0 +1,9 @@
+# Swift 编译缓存（module cache 可达数百 MB，不要入库）
+native/.build/
+
+# macOS
+.DS_Store
+
+# 本地运行状态
+*.pid
+*.log
