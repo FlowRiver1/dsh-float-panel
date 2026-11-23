@@ -36,7 +36,7 @@ final class PanelController: NSObject, NSApplicationDelegate, WKNavigationDelega
     private var failures = 0
     private var loadedOnce = false
 
-    private let frameKey = "panelAnchor"
+    private let frameKey = "panelAnchor2"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments
@@ -106,14 +106,14 @@ final class PanelController: NSObject, NSApplicationDelegate, WKNavigationDelega
         panel.setFrame(restoredFrame(), display: false)
     }
 
-    /// The saved anchor is the top-left corner, so a height change (or a taller
-    /// card) never moves the panel down the screen.
+    /// The saved anchor is the bottom-left corner, so the panel grows upward from
+    /// the bottom edge instead of pushing down past the Dock.
     private func restoredFrame() -> NSRect {
         let size = DEFAULT_SIZE
         if let raw = defaults.string(forKey: frameKey) {
             let parts = raw.split(separator: ",").compactMap { Double($0) }
             if parts.count == 2 {
-                let origin = NSPoint(x: parts[0], y: parts[1] - size.height)
+                let origin = NSPoint(x: parts[0], y: parts[1])
                 let proposed = NSRect(origin: origin, size: size)
                 if NSScreen.screens.contains(where: { $0.visibleFrame.intersects(proposed) }) {
                     return proposed
@@ -123,25 +123,25 @@ final class PanelController: NSObject, NSApplicationDelegate, WKNavigationDelega
         guard let screen = NSScreen.main else { return NSRect(origin: .zero, size: size) }
         let visible = screen.visibleFrame
         return NSRect(x: visible.maxX - size.width - 18,
-                      y: visible.maxY - size.height - 18,
+                      y: visible.minY + 18,
                       width: size.width, height: size.height)
     }
 
     private func saveFrame() {
         guard let panel else { return }
         let frame = panel.frame
-        defaults.set("\(frame.minX),\(frame.maxY)", forKey: frameKey)
+        defaults.set("\(frame.minX),\(frame.minY)", forKey: frameKey)
     }
 
-    /// Fit the window to the content the page measured, keeping the top edge.
+    /// Fit the window to the content the page measured, keeping the bottom edge.
     private func resize(to height: CGFloat) {
         guard let panel else { return }
         let target = min(max(height, MIN_HEIGHT), MAX_HEIGHT)
         var frame = panel.frame
         guard abs(frame.height - target) > 0.5 else { return }
-        let top = frame.maxY
+        let bottom = frame.minY
         frame.size.height = target
-        frame.origin.y = top - target
+        frame.origin.y = bottom
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.12
             context.allowsImplicitAnimation = true

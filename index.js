@@ -281,11 +281,20 @@ export function apply(ctx, config) {
         rec.turnStartedAt = typeof event.time === "number" ? event.time : Date.now();
         rec.progress = null;
         rec.activeTool = null;
+        rec.pending = null;
+        rec.pendingSince = 0;
         maybeAutoOpen();
         break;
       case "step/start":
         markRunning(rec, event.time);
         rec.step = typeof data?.step === "number" ? data.step : rec.step;
+        // A pending question or approval can only live inside the step that
+        // asked for it; a newer step means it was answered without a matching
+        // tool/result reaching us.
+        if (rec.pending && typeof rec.pending.step === "number" && rec.pending.step < rec.step) {
+          rec.pending = null;
+          rec.pendingSince = 0;
+        }
         if (!rec.activeTool) rec.phase = "thinking";
         break;
       case "tool/call": {
@@ -307,7 +316,13 @@ export function apply(ctx, config) {
         if (name === "ask_user_question") {
           const questions = parseQuestions(data?.arguments);
           if (questions) {
-            rec.pending = { kind: "question", callId, questions };
+            rec.pending = {
+              kind: "question",
+              callId,
+              questions,
+              turn: typeof data?.turn === "number" ? data.turn : rec.turn,
+              step: typeof data?.step === "number" ? data.step : rec.step,
+            };
             rec.pendingSince = typeof event.time === "number" ? event.time : Date.now();
           }
         }
@@ -319,7 +334,17 @@ export function apply(ctx, config) {
         break;
       }
       case "tool/result": {
-        const callId = typeof data?.message?.callId === "string" ? data.message.callId : "";
+        // The harness puts the id on `toolCallId` (and mirrors it on
+        // `source.callId`); `message.callId` never exists, so read it last.
+        const message = data?.message;
+        const callId =
+          typeof message?.toolCallId === "string" && message.toolCallId
+            ? message.toolCallId
+            : typeof message?.callId === "string" && message.callId
+              ? message.callId
+              : typeof message?.source?.callId === "string"
+                ? message.source.callId
+                : "";
         if (callId && rec.activeTool?.callId === callId) rec.activeTool = null;
         if (callId && rec.pending?.callId === callId) {
           rec.pending = null;
@@ -355,6 +380,8 @@ export function apply(ctx, config) {
           toolLabel: TOOL_LABELS[data.toolName] ?? (typeof data.toolName === "string" ? data.toolName : ""),
           reason: clip(data.reason, 300),
           detail: known ? { tool: TOOL_LABELS[known.name] ?? known.name, summary: known.summary } : null,
+          turn: typeof data.turn === "number" ? data.turn : rec.turn,
+          step: typeof data.step === "number" ? data.step : rec.step,
         };
         rec.pendingSince = typeof event.time === "number" ? event.time : Date.now();
         break;

@@ -1,6 +1,6 @@
 {
   "name": "dsh-float-panel",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "DSH 任务浮窗：系统级置顶小窗显示任务状态、实时步骤、审批按钮与完成预览。",
   "license": "MIT",

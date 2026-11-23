@@ -26,7 +26,7 @@ dsh plugin --profile web add link:/path/to/float-panel
 
 ## Usage
 
-- The window appears in the top-right corner after you send a request; drag it anywhere, the position is remembered.
+- The window appears in the bottom-right corner after you send a request; drag it anywhere, the position is remembered. It is anchored by its bottom edge, so a taller card grows upward instead of pushing toward the Dock.
 - Set `config.autoOpen: false` to stop it opening automatically; the "◍ 任务浮窗" button at the bottom-right of DSH brings it back.
 - The **×** only closes the window, it never interrupts the task.
 - One conversation at a time is shown (approval > question > running > done); the rest collapse into a `+N` counter.
