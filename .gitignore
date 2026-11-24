@@ -7,3 +7,9 @@ native/.build/
 # 本地运行状态
 *.pid
 *.log
+
+# Windows 壳的构建/运行产物（exe、DLL 与 x64/arm64 loader 要入库，这些不要）
+native/windows/webview/
+native/windows/window.json
+native/windows/DSHFloatPanel-debug.exe
+native/windows/DSHFloatPanel-debug.pdb

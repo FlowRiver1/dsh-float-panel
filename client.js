@@ -255,19 +255,41 @@
           });
         }
 
+        var hint = '';
+
+        function setHint(text) {
+          if (hint === text) return;
+          hint = text;
+          emit();
+        }
+
         function flashReason(reason) {
           try {
             console.warn('[dsh-float-panel] cannot open the floating window:', reason);
           } catch (error) { /* no console */ }
+          var text = '浮窗启动失败';
+          if (reason === 'unsupported-platform') text = '此系统暂不支持浮窗';
+          else if (reason === 'webview2-missing') text = '需要安装 WebView2 运行时';
+          else if (reason === 'binary-missing') text = '浮窗程序缺失，请重装插件';
+          else if (reason === 'server-not-ready') text = 'DSH 服务未就绪，请重试';
+          setHint(text);
+          setTimeout(function () { setHint(''); }, 5000);
         }
 
         function FloatButton() {
           var pair = React.useState(running);
           var visible = pair[0];
           var setVisible = pair[1];
+          var hintPair = React.useState(hint);
+          var hintText = hintPair[0];
+          var setHintText = hintPair[1];
           React.useEffect(function () {
             setVisible(running);
-            return subscribe(function () { setVisible(running); });
+            setHintText(hint);
+            return subscribe(function () {
+              setVisible(running);
+              setHintText(hint);
+            });
           }, []);
           if (visible) return null;
           return React.createElement(
@@ -297,7 +319,7 @@
               },
             },
             React.createElement('span', { style: { fontSize: '11px' } }, '◍'),
-            '任务浮窗',
+            hintText || '任务浮窗',
           );
         }
 

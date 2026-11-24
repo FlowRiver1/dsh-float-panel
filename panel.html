@@ -23,7 +23,7 @@
     overflow: hidden;
   }
   body {
-    font: 12px/1.4 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    font: 12px/1.4 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Segoe UI", "Microsoft YaHei UI", sans-serif;
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     user-select: none;
@@ -317,6 +317,11 @@
 
   function postMessageNative(msg) {
     try {
+      // macOS: WKWebView. Windows: WebView2. Both take one JSON object.
+      if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
+        window.chrome.webview.postMessage(msg);
+        return;
+      }
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dsh) {
         window.webkit.messageHandlers.dsh.postMessage(msg);
       }
@@ -384,6 +389,18 @@
     }
     done();
   });
+
+  /* The macOS shell covers the top 22px with a native drag strip, so the page
+     never sees those clicks there; WebView2 has no such overlay, so the same
+     strip forwards the drag to the Windows shell instead. */
+  var dragStrip = document.querySelector('.top');
+  if (dragStrip) {
+    dragStrip.addEventListener('mousedown', function (ev) {
+      if (ev.button !== 0) return;
+      if (ev.target.closest('button')) return;
+      postMessageNative({ type: 'drag' });
+    });
+  }
 
   document.getElementById('close').addEventListener('click', function () {
     post('/panel/close', {}).then(function () { retire(); }, function () { retire(); });

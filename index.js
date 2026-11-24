@@ -38,9 +38,24 @@ import { fileURLToPath } from "node:url";
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PREFIX = "/float-panel";
 const PANEL_FILE = join(ROOT, "panel.html");
+const IS_MAC = process.platform === "darwin";
+const IS_WIN = process.platform === "win32";
+// One package ships one shell per platform. The host picks the one this system
+// can actually run, so a single install serves macOS and Windows; anywhere else
+// the routes still work and the page reports the platform as unsupported.
 const APP_PATH = join(ROOT, "native", "DSH Float Panel.app");
-const BIN_PATH = join(APP_PATH, "Contents", "MacOS", "dsh-float-panel");
-const STATE_DIR = join(homedir(), "Library", "Application Support", "dsh-float-panel");
+const WINDOWS_SHELL = join(ROOT, "native", "windows", "DSHFloatPanel.exe");
+const BIN_PATH = IS_MAC
+  ? join(APP_PATH, "Contents", "MacOS", "dsh-float-panel")
+  : IS_WIN
+    ? WINDOWS_SHELL
+    : "";
+// Only the token, the shell pid and the window anchor live here.
+const STATE_DIR = IS_MAC
+  ? join(homedir(), "Library", "Application Support", "dsh-float-panel")
+  : IS_WIN
+    ? join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "dsh-float-panel")
+    : join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "dsh-float-panel");
 const TOKEN_FILE = join(STATE_DIR, "token");
 const PID_FILE = join(STATE_DIR, "panel.pid");
 const DONE_TTL_MS = 30 * 60 * 1000;
@@ -541,7 +556,7 @@ export function apply(ctx, config) {
 
   function startPanel() {
     if (panel) return { ok: true, running: true };
-    if (process.platform !== "darwin") return { ok: false, reason: "unsupported-platform" };
+    if (!BIN_PATH) return { ok: false, reason: "unsupported-platform" };
     if (!existsSync(BIN_PATH)) return { ok: false, reason: "binary-missing" };
     const listenPort = port();
     if (!listenPort) return { ok: false, reason: "server-not-ready" };
@@ -553,16 +568,23 @@ export function apply(ctx, config) {
     const url = `http://127.0.0.1:${listenPort}${PREFIX}/panel?t=${token}`;
     let proc;
     try {
-      proc = spawn(BIN_PATH, [url, STATE_DIR], { stdio: "ignore" });
+      proc = spawn(BIN_PATH, [url, STATE_DIR], { stdio: "ignore", windowsHide: true });
     } catch (error) {
       ctx.logger?.warn?.(`[dsh-float-panel] cannot start the floating window: ${String(error)}`);
       return { ok: false, reason: "spawn-failed" };
     }
     panel = proc;
-    proc.on("exit", () => {
+    proc.on("exit", (code) => {
       if (panel !== proc) return;
       panel = null;
-      broadcast("panel", { running: false });
+      // The Windows shell exits with 2 when it cannot start the page, which in
+      // practice means the WebView2 runtime is missing; the page shows a hint.
+      if (code === 2) {
+        ctx.logger?.warn?.("[dsh-float-panel] WebView2 runtime is missing");
+        broadcast("panel", { running: false, reason: "webview2-missing" });
+      } else {
+        broadcast("panel", { running: false });
+      }
       publish();
     });
     proc.on("error", () => {
@@ -581,7 +603,7 @@ export function apply(ctx, config) {
 
   function maybeAutoOpen() {
     if (!autoOpen || panel || autoOpenFailed) return;
-    if (process.platform !== "darwin") return;
+    if (!BIN_PATH) return;
     const result = startPanel();
     if (!result.ok) autoOpenFailed = true;
   }
@@ -925,19 +947,31 @@ function loadToken() {
   return token;
 }
 
+/** The command line of one process, or "" when it cannot be read. */
+function processCommandLine(pid) {
+  try {
+    if (IS_WIN) {
+      // tasklist prints one CSV row: "DSHFloatPanel.exe","1234","Console","1","12,345 K"
+      return execFileSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], {
+        encoding: "utf8",
+        timeout: 2000,
+        windowsHide: true,
+      });
+    }
+    return execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8", timeout: 2000 });
+  } catch {
+    return "";
+  }
+}
+
 /** Kill a panel left over from a previous host process (same binary only). */
 function killStalePanel() {
   try {
     const raw = readFileSync(PID_FILE, "utf8").trim();
     const pid = Number(raw);
     if (!Number.isInteger(pid) || pid <= 0) return;
-    let command = "";
-    try {
-      command = execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8", timeout: 2000 });
-    } catch {
-      return;
-    }
-    if (!command.includes("dsh-float-panel")) return;
+    const command = processCommandLine(pid).toLowerCase();
+    if (!command.includes(IS_WIN ? "dshfloatpanel" : "dsh-float-panel")) return;
     process.kill(pid, "SIGTERM");
   } catch {
     // no stale panel

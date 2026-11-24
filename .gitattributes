@@ -1,0 +1,14 @@
+# Binaries must survive a checkout on any platform: never let git rewrite them.
+*.exe  binary
+*.dll  binary
+*.pdb  binary
+*.png  binary
+native/*/Contents/MacOS/* binary
+
+# The macOS shell is built from these on a Mac; keep the line endings intact.
+*.sh    text eol=lf
+*.swift text eol=lf
+
+# The Windows build script is UTF-8 with a BOM and Windows line endings on
+# purpose: Windows PowerShell 5.1 needs the BOM to read its Chinese messages.
+*.ps1 text eol=crlf
