@@ -8,6 +8,10 @@ Once DSH starts a task, a small system-level floating window stays on top of wha
 | --- | --- |
 | ![running](docs/running.png) | ![approval](docs/approval.png) |
 
+The first two come from macOS. Windows renders the same card with the same page; only the window shell differs:
+
+![Task window on Windows](docs/windows-running.png)
+
 ## Install
 
 Requirements: **macOS 13+** (native AppKit panel) or **Windows 10 1903+ / Windows 11** (native WPF + WebView2 panel; needs the WebView2 Runtime and .NET Framework 4.8, both preinstalled on Windows 11 and most Windows 10 machines), plus DSH `>=0.2.0-rc.2`.

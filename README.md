@@ -26,6 +26,10 @@ DSH 发起任务后，你切到任何软件都能看到一个系统级置顶小�
 | 待回答 | ![待回答](docs/question.png) |
 | 已完成 | ![已完成](docs/done.png) |
 
+上面四张取自 macOS。Windows 是同一张卡片、同一套渲染，区别只在窗口壳：
+
+![Windows 上的任务浮窗](docs/windows-running.png)
+
 ## 安装
 
 要求：**macOS 13+**（原生 AppKit 窗口）或 **Windows 10 1903+ / Windows 11**（原生 WPF + WebView2 窗口，需要 WebView2 Runtime 与 .NET Framework 4.8；Win11 与绝大多数 Win10 自带），DSH `>=0.2.0-rc.2`。

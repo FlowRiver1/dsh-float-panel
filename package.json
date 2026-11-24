@@ -39,6 +39,8 @@
     "cordis.patch.yml",
     "locale",
     "native",
+    "assets",
+    "screenshots.json",
     "icon.svg",
     "README.md",
     "LICENSE"
